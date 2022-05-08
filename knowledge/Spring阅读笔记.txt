@@ -1,0 +1,6 @@
+1.Spring不允许出现循环DependsOn，会直接抛错
+2.AOP 表达式： 在某个包下所有类和类方法：execution(* com.xx.pack.*.*(..))
+                                                                     within(* com.xx.pack.*.*(..))
+                         在某个包下所有子包和类的类方法： execution(* com.xx.pack..*.*(..))
+                                                                                within(* com.xx.pack..*.*(..))
+3. 

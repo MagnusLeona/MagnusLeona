@@ -1,0 +1,7 @@
+接口文档： 
+1. 根据客户id查询客户： /query/user/id/{id}
+2.根据客户name查询客户：/query/user/name/{name}
+3.查询全量客户: /query/users   #默认分页，规则如下： 起始页面为0，分页基数为10；分页数据写到post的请求体中
+4.新增用户： /insert/user
+5.新增需求： /create/business
+6.需求指派（指派给团队）：/update/business/assign

@@ -1,0 +1,8 @@
+# Spring实现事务的代码分析
+
+## 一、实现的基础
+
+1.Spring事务是基于AOP实现的。
+
+2.Spring实现事务的方式是使用BeanPostProcessor，类名叫InfrastructureAdvisorAutoProxyCreator，实现了SmartInstantiationAwareBeanPostProcessor接口。这个接口应该是通用的代理所需要实现的接口。继承了AbstractAdvisorAutoProxyCreator类，这个类是通用的创建代理的类。扩展这个类，就可
+

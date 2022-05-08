@@ -1,0 +1,10 @@
+Spring使用哪一种方式处理AOP取决于我们是否引入了AspectJ模式的AOP方式。
+如果引入了AspectJ，则使用 AnnotationAwareAspectJAutoProxyCreator。
+否则使用默认的事务处理： InfrastructureAdvisorAutoProxyCreator。
+
+在引入AOP处理器的时候，AopConfigUtils会判断引入的所有处理器的优先级。显然AnnotationAwareAspectJAutoProxyCreator优先级更高。
+
+AnnotationAwareAspectJAutoProxyCreator ---> BeanPostProcessor
+AspectJAutoProxyCreator ---> BeanPostProcessor
+InfrastructureAdvisorAutoProxyCreator ---> BeanPostProcessor
+这三个分别是Spring定义的三个aop实现方法，优先级从上到下依次减小。

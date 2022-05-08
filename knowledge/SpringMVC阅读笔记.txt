@@ -1,0 +1,72 @@
+SpringMVC阅读笔记
+
+
+1.SpringMVC启动原理：SpringMVC使用了JAVA中的SPI机制，将接口SpringServletContainerInitializer暴露到/META-INF/services/javax.servlet.ServletContainerInitializer文件中。
+                                    Tomcat启动的时候也使用了SPI机制，去扫描所有的ServletContainerInitializer接口的实现类，然后依次去执行loadOnStart方法去启用和初始化各种信息。
+                                    SpringServletContainerInitializer定义了一个处理自定义注解的Initializer： @HandlesTypes({WebApplicationInitializer.class})，表示需要处理所有的实现了
+                                    WebApplicationInitializer接口的类。Tomcat获取到SpringServletContainerInitializer的时候，会获取@HandlesTypes注解。这个注解的作用是将注解指定的class对象作为
+                                    参数传递到ServletContainerInitializer.onStartup中。Tomcat扫描指定类的方法是使用BCEL去读取/WEB-INF/classes中的某些jar和某些class文件的超类名或者接口列表，判断
+                                    是否与记录的注解类名相同，如果相同，则调用org.apache.catalina.util.Introspection类将class实例化并保存到onStartup中调用。---这里需要关注SPI的原理和Tomcat是怎么实现通过@HandlesTypes去扫描和加载所有实现类的
+
+2.通过注解Annotation+SPI实现SpringMVC启动配置类： 实现WebApplicationInitializer接口，然后new一个DispatcherServlet,并把一个ApplicationContext传递给DispatcherServlet。将这个Servlet手动注册到Serlvet容器中（ServletContext.addServlet）
+   或者通过继承AbstractAnnotationConfigDispatcherServletInitializer抽象类，去重写Root配置类、映射路径、Servlet配置类等方法，也可以自定义DispatcherServlet的各项参数。
+
+3.DispatcherServlet在初始化的时候，会检查在WebApplicationContext中是否有定义处理请求的各种特殊Bean，如果没有，将从DispatcherServlet.properties中加载默认的处理Bean。
+
+4. ForwardedHeaderFilter 过滤报文头 // Forwarded Http Header 用于代理服务器去获取原始请求   --- X-Forwarded-For 表示请求的源地址，当服务器均开启记录源地址的时候，进行转发的时候就需要在X-Forward-For后面依次加上自己拿到这个请求的remote_address，然后传给下一个服务器
+   ShallowEtagHeaderFilter 处理报文生成ETag做是否更新的比对
+   CorsFilter 处理跨域请求
+
+5.@Controller注解才能标注这个类是用于处理web请求的，@Component做不到这个
+
+6.@PathVariable 注解，标注这个属性需要从URI中获取到参数并注入,请看7.
+
+7.web开发环境 URI解析规则，Spring提供了两种： 一个是PathPattern， 一个是AntPathMatcher。PathPattern是Spring 5.0之后才引入的，重点优化web路径URL的解析，效率上比AntPathMatcher要高一些。可以在MVC Config中去自定义使用哪一种解析方式。PathPattern还有个功能是将URL中的/{project}/ 类似的值捕获到，并存入project变量中去，然后通过@PathVariable注释的方式去获取。
+
+8.Spring 5.3之前，MVC匹配路由的默认规则会开启后缀匹配，即会匹配到路由和路由之后的.* ,比如说匹配/user,默认开启后缀匹配模式，会匹配到所有的/user.* 的路径。这个时候, /user.html, /user.aaa,等等，都会被匹配到/user上面去。从5.3之后，Spring就默认关闭了这种匹配规则。
+
+9.通过控制@GetMapping/@PostMapping中的consumes参数，可以有效控制接受的请求的Content-type: 例如仅接受application/json格式的Content-type:  @PostMapping(path="/path", consumes="application/json")。 MediaType常量类集成了所有的报文类型。Content-type表示接受的request的报文类型。和Accept注意区分。
+   通过控制@GetMapping/@PostMapping中的produces参数，可以有效控制接受的请求的Accept:服务器仅返回application/json格式的报文，则: @PostMapping(path="/path", produces="application/json")。表示仅接受Accept为 json格式的前端请求。Accept是Header中的一个参数，表示客户端希望接受的报文格式。   如果不符合接受类型，报错406：不可接收。
+。需要的三个参数分别是：
+10.可以向RequestMappingHandlerMapping的对象注册自己的mapping规则，requestMappingHandlerMapping.registerMapping(arg1, arg2, arg3) arg1：RequestMappingInfo生成的一个映射规则描述对象，arg2：映射的具体控制器， arg3：需要映射的控制器的具体方法
+
+
+Spring中，个性化配置MVC的方法：
+   1.给入口配置类加上@EnableWebMvc，然后任何实现了WebMvcConfigurer的@Configuration配置类都能实现配置。
+   2.不要加@EnableWebMvc,只需要继承WebMvcConfigurationSupport或者DelegateWebMvcConfiguration类并重写里面的方法。
+   @EnableWebMvc注解引入了DelegateWebMvcConfiguration的类，这个类是给MVC内部添加各种默认的配置项。DelegateWebMvcConfiguration类就是继承自WebMvcConfigurationSupport类，并实现了各种默认化配置。
+
+
+   MVC个性化配置项：
+      1.Formatter：格式化工具，可以自定义各种数据的格式化类型，比如@NumbeFormat和@DateTimeFormat。DateTimeFormatterRegistrar.registerFormatters;   通过WebMvcConfigurer中的addFormatters方法。
+      2.Validation: 校验工具。作用暂时未知，通过WebMvcConfigurer中的getValidator方法。
+      3.Interceptor: 拦截器，通过WebMvcConfigure.addInterceptors方法注册。InterceptionRegistry.addInterceptor，会返回这个拦截器，可以进行path拦截设置。
+      4.Content Type：设置请求的文件后缀，通过WebMvcConfigurer.configureContentNegotiation方法的ContentNegotiationConfigurer.mediaType来设置。 ---- 在浏览器端请求中可以在ContentType中设置编码格式，增加charset=UTF-8即可
+      5.HttpMessage： 报文格式转换器，通过WebMvcConfigurer.configureMessageConverters去注册自己的报文转换工具。常用的： Jackson2ObjectMapperBuilder注入到MappingJackson2HttpMessageConverter。
+      6.ViewControllers: 自定义路径和View的映射规则，在没有相应的Controller去处理path的时候，可以在这里自定义，映射到相应的静态资源。
+      7.StaticResources: 静态资源处理器，专门用来处理静态资源的请求。（静态资源只有放到webapp目录下才能逐级检索所有文件夹的内容，放到classpath下）WebMvcConfigurer.addResourceHandler方法，ResourceHandlerRegistry.addResourceHandler.addResourceLocations.setCacheControl   ----这个很重要，可以处理所有的静态资源请求
+      8.PathMatching: 路径匹配
+
+
+
+RequestMappingHandlerMapping是一个处理器映射器的规则，基于Annotation的，@RequestMapping方法注解的映射规则。
+
+SpringMVC实现静态资源处理的两种方式： 
+	一个是使用ResourceHandler，可以通过 MVC Config去进行配置: WebMvcConfigurer.addResourceHandler。访问路径是我们设置的映射路径+文件相对于我们设置的路径的文件路径。
+	另一个是使用DefaultServletHandler方式：DefaultServletHandler会检查所有到DispatcherServlet的URL进行筛选，如果发现是请求的静态资源，则将这个请求转给Servlet容器（比如Tomcat）默认的Servlet去处理。WebMvcConfigurer中有相应的处理DefaultServletHandler的方法。Default情况下，访问路径是webapp下文件的全路径。
+
+Restful风格： 使用URI唯一标记一个资源（包含文件，处理方式，数据等等）， Restful风格的URI： /${PathVariable}/path/${PathVariable}/ 类似的形式去访问。将参数直接作为请求路径的一部分去唯一标识一个资源。
+
+Tomcat中定义了default的servlet，专门用来处理静态资源。在SpringMVC中启用DefaultServletHandler的话，遇到静态资源就可以直接交给default去处理。静态资源如果放到WEB-INF目录底下，就不能通过default servelt 去获取，因为涉及安全性，只能通过servlet去拿。如果使用的是web容器的默认servlet，那就只能将文件放到WEB_INF同级的目录下才能访问到了。
+
+自定义异常处理方法： 实现HandlerExceptionHandler接口, 或者使用 @ControllerAdvice配合@ExceptionHandler使用。SpringMVC会根据@ExceptionHandler 标注的方法要求的入参去判断他能处理哪一种类型的Exception（此类方法必须传入一个Exception类型，表示要处理的类型，否则启动就会报错）
+
+SpringMVC整合SSM框架内容： 1.Spring相关依赖 2.数据库 3.数据库连接池 4.Mybatis
+
+DriverManagerDataSource只是新建连接，根本没有连接池的作用，不推荐使用。推荐使用Druid数据库连接池
+
+重点关注： 数据库读写分离
+
+SpringMVC解析url和controller的映射使用的类： BeanNameUrlHandlerMapping、SimpleUrlHandlerMapping、ControllerClassNameHandlerMapping，
+基于注解的解析： RequestMappingHandlerMapping
+

@@ -1,0 +1,44 @@
+Mybatis阅读笔记：
+
+### 1.SqlSessionFactoryBuilder：
+    这个类是用来实例化SqlSessionFactory的，一般只在实例化的时候用到。 在Spring中注入SqlSessionFactory只需要使用SqlSessionFactoryBean即可。
+### 2.SqlSessionFactory： 
+    作用域最好是单例，一旦创建就会一直存在。
+### 3.SqlSession: 
+    每个线程都需要有自己的实例，因为这个是线程不安全的   sqlSessionFactory.openSession
+### 4.获取映射器实例： 
+    session.getMapper
+### 5.SqlSessionTemplate:
+     是sqlSession接口的实现类，可以替代我们在代码中自己生成的SqlSession，并且是线程安全的，可以被多个线程共享使用。
+### 6.SqlSession实现BATCH批量操作:
+    必须和Spring的事务结合起来才可以，否则会出现每一次执行都会新建sqlSession的情况，极大降低效率！！！
+
+### 7.可以使用TransactionTemplate.execute手动触发事务，但是貌似这个手动触发的批量，耗时很长，暂时还没有去研究为啥(研究出来了，触发的时长是正常的，前面测试的慢是因为我没有提交事务)。
+``` TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+transactionTemplate.execute(txStatus -> {
+
+    for (int i = 0; i < 100000; i++) {
+        Map map = new HashMap();
+        map.put("id", i);
+        map.put("name", i);
+        map.put("description", i + 1);
+        sqlSession.insert("com.magnus.managee.main.business.mappers.UserMapper.insertUser", map);
+    }
+    return null;
+});
+```
+    需要传入一个transactionManager，作为事务的执行器。
+
+### 8. 使用MapperScan自动扫描并注入的Mapper对象，实际上是使用动态代理生成的代理对象，
+    并且是使用的在Spring容器中能够获取到的优先级最高的SqlSession进行动态代理的处理。
+    所以当Spring中有多个SqlSession时，一定要区分去处理Mapper的注入，
+    当然也可以使用手动的方式去注入，sqlsession.getMapper的方式，使用指定的SqlSessionTemplate手动生成代理对象。   
+
+### 9.Mybatis使用同一个sqlSession的时候，如果执行的语句完全一样，会有相应的结果缓存。 Spring在默认非事务的情况下，mybatis会在每一个执行的mapper方法的时候去获取一个新的sqlsession。但是如果在事务处理环境中，则会使用同一个sqlSession对象。
+    一级缓存 基于sqlsession，同一个sqlsession，默认开启缓存。
+    二级缓存是基于Mapper的命名空间，相同命名空间下能够读取到上一次查询的缓存，不同命名空间则不行，所以如果在某些比较条件下，不要随便使用二级缓存，很容易造成读取数据不一致的情况。比如两个不同的Mapper里面有一组相同的Sql语句，执行的时候有可能一个是读缓存，一个是读数据库，造成数据不一致。
+
+    基于JavaApi的设置缓存的方法：
+    ```
+
+    ```
